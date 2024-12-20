@@ -13,7 +13,9 @@ from torch.multiprocessing import Pool, Process, set_start_method
 
 class KeypointExtractor():
     def __init__(self):
-        self.detector = face_alignment.FaceAlignment(face_alignment.LandmarksType._2D)   
+        self.detector = face_alignment.FaceAlignment(face_alignment.LandmarksType.TWO_D)
+        # Replaced outdated call methods
+        # self.detector = face_alignment.FaceAlignment(face_alignment.LandmarksType._2D)
 
     def extract_keypoint(self, images, name=None):
         if isinstance(images, list):
@@ -68,11 +70,12 @@ def run(data):
     os.environ['CUDA_VISIBLE_DEVICES'] = device
     kp_extractor = KeypointExtractor()
     images = read_video(filename)
-    name = filename.split('/')[-2:]
-    os.makedirs(os.path.join(opt.output_dir, name[-2]), exist_ok=True)
+    name = os.path.basename(filename).split('.')[0]  # More robust path handling
+    output_dir = os.path.join(opt.output_dir, name)
+    os.makedirs(output_dir, exist_ok=True)
     kp_extractor.extract_keypoint(
         images, 
-        name=os.path.join(opt.output_dir, name[-2], name[-1])
+        name=os.path.join(output_dir, name)
     )
 
 if __name__ == '__main__':
@@ -84,12 +87,11 @@ if __name__ == '__main__':
     parser.add_argument('--workers', type=int, default=4)
 
     opt = parser.parse_args()
-    filenames = list()
-    VIDEO_EXTENSIONS_LOWERCASE = {'mp4'}
-    VIDEO_EXTENSIONS = VIDEO_EXTENSIONS_LOWERCASE.union({f.upper() for f in VIDEO_EXTENSIONS_LOWERCASE})
-    extensions = VIDEO_EXTENSIONS
-    for ext in extensions:
-        filenames = sorted(glob.glob(f'{opt.input_dir}/**/*.{ext}'))
+    filenames = []
+    VIDEO_EXTENSIONS = {'mp4'}
+    for ext in VIDEO_EXTENSIONS:
+        filenames.extend(sorted(glob.glob(f'{opt.input_dir}/**/*.{ext}', recursive=True)))
+    
     print('Total number of videos:', len(filenames))
     pool = Pool(opt.workers)
     args_list = cycle([opt])
@@ -97,3 +99,4 @@ if __name__ == '__main__':
     device_ids = cycle(device_ids)
     for data in tqdm(pool.imap_unordered(run, zip(filenames, args_list, device_ids))):
         None
+
